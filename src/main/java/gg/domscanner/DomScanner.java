@@ -46,11 +46,11 @@ public class DomScanner implements BurpExtension, HttpHandler {
     public ResponseReceivedAction handleHttpResponseReceived(HttpResponseReceived responseReceived) {
         Annotations annotations = responseReceived.annotations();
         String contentType = responseReceived.mimeType().name().toLowerCase();
-        boolean foundSink = false;
 
         // Check if the response is JavaScript
-        if (contentType.equals("script")) {
+        if (contentType.equals("script") || contentType.equals("HTML")) {
             String responseBody = responseReceived.body().toString();
+            boolean foundSink = false;
 
             for (Pattern pattern : sinkPatterns) {
                 Matcher matcher = pattern.matcher(responseBody);
@@ -59,11 +59,18 @@ public class DomScanner implements BurpExtension, HttpHandler {
                     foundSink = true;
                 }
             }
-        }
 
-        // If a sink is found, update the annotations
-        if (foundSink) {
-            annotations = annotations.withHighlightColor(HighlightColor.BLUE);
+            // If a sink is found, update the annotations
+            if (foundSink) {
+                annotations = annotations.withHighlightColor(HighlightColor.YELLOW);
+            }
+
+            // check for possible clobbering attacks
+            Matcher matcher = Pattern.compile("window\\.").matcher(responseBody);
+            if (matcher.find()) {
+                logging.raiseInfoEvent("[+] Potential DOM CLOBBERING vuln: " + matcher.group() + " in " + responseReceived.initiatingRequest().url());
+                annotations = annotations.withHighlightColor(HighlightColor.PURPLE);
+            }
         }
 
         // Return the response with updated annotations
@@ -71,23 +78,40 @@ public class DomScanner implements BurpExtension, HttpHandler {
     }
 
     private static void loadSinkPatterns() {
+        // SOURCES
+        sinkPatterns.add(Pattern.compile("document\\.cookie"));
+        sinkPatterns.add(Pattern.compile("document\\.URL"));
+        sinkPatterns.add(Pattern.compile("document\\.documentURI"));
+        sinkPatterns.add(Pattern.compile("document\\.URLUnencoded"));
+        sinkPatterns.add(Pattern.compile("document\\.baseURI"));
+        sinkPatterns.add(Pattern.compile("document\\.referrer"));
+        sinkPatterns.add(Pattern.compile("location"));
+        sinkPatterns.add(Pattern.compile("history\\.pushState"));
+        sinkPatterns.add(Pattern.compile("history\\.replaceState"));
+        sinkPatterns.add(Pattern.compile("window\\.name"));
+        sinkPatterns.add(Pattern.compile("localStorage"));
+        sinkPatterns.add(Pattern.compile("sessionStorage"));
+        sinkPatterns.add(Pattern.compile("IndexedDB"));
+        sinkPatterns.add(Pattern.compile("Database"));
+
+        // SINKS
         sinkPatterns.add(Pattern.compile("eval"));
         sinkPatterns.add(Pattern.compile("setTimeout"));
         sinkPatterns.add(Pattern.compile("setInterval"));
         sinkPatterns.add(Pattern.compile("Function"));
         sinkPatterns.add(Pattern.compile("execScript"));
         sinkPatterns.add(Pattern.compile("document\\.write"));
+        sinkPatterns.add(Pattern.compile("document\\.domain"));
         sinkPatterns.add(Pattern.compile("innerHTML"));
         sinkPatterns.add(Pattern.compile("outerHTML"));
         sinkPatterns.add(Pattern.compile("insertAdjacentHTML"));
-        sinkPatterns.add(Pattern.compile("location"));
-        sinkPatterns.add(Pattern.compile("localStorage"));
-        sinkPatterns.add(Pattern.compile("sessionStorage"));
-        sinkPatterns.add(Pattern.compile("document\\.cookie"));
-        sinkPatterns.add(Pattern.compile("window\\.name"));
         sinkPatterns.add(Pattern.compile("window\\.open"));
+        sinkPatterns.add(Pattern.compile("window\\.location"));
+        sinkPatterns.add(Pattern.compile("element\\.src"));
+        sinkPatterns.add(Pattern.compile("WebSocket"));
         sinkPatterns.add(Pattern.compile("postMessage"));
         sinkPatterns.add(Pattern.compile("onmessage"));
+        sinkPatterns.add(Pattern.compile("setRequestHeader"));
         sinkPatterns.add(Pattern.compile("\\$\\.html"));
         sinkPatterns.add(Pattern.compile("\\$\\.append"));
         sinkPatterns.add(Pattern.compile("\\$\\.prepend"));
@@ -97,5 +121,12 @@ public class DomScanner implements BurpExtension, HttpHandler {
         sinkPatterns.add(Pattern.compile("\\$\\.wrapAll"));
         sinkPatterns.add(Pattern.compile("\\$\\.replaceWith"));
         sinkPatterns.add(Pattern.compile("\\$\\.text"));
+        sinkPatterns.add(Pattern.compile("FileReader\\.readAsText"));
+        sinkPatterns.add(Pattern.compile("ExecuteSql"));
+        sinkPatterns.add(Pattern.compile("sessionStorage\\.setItem"));
+        sinkPatterns.add(Pattern.compile("document\\.evaluate"));
+        sinkPatterns.add(Pattern.compile("JSON\\.parse"));
+        sinkPatterns.add(Pattern.compile("element\\.setAttribute"));
+        sinkPatterns.add(Pattern.compile("RegExp"));
     }
 }
