@@ -48,7 +48,7 @@ public class DomScanner implements BurpExtension, HttpHandler {
         String contentType = responseReceived.mimeType().name().toLowerCase();
 
         // Check if the response is JavaScript
-        if (contentType.equals("script") || contentType.equals("HTML")) {
+        if (contentType.equalsIgnoreCase("script") || contentType.equalsIgnoreCase("html")) {
             String responseBody = responseReceived.body().toString();
             boolean foundSink = false;
 
@@ -69,7 +69,7 @@ public class DomScanner implements BurpExtension, HttpHandler {
             Matcher matcher = Pattern.compile("window\\.").matcher(responseBody);
             if (matcher.find()) {
                 logging.raiseInfoEvent("[+] Potential DOM CLOBBERING vuln: " + matcher.group() + " in " + responseReceived.initiatingRequest().url());
-                annotations = annotations.withHighlightColor(HighlightColor.PURPLE);
+                annotations = annotations.withHighlightColor(HighlightColor.RED);
             }
         }
 
